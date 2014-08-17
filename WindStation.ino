@@ -1,5 +1,8 @@
+#include <Wire.h>
+#include <Time.h>
 #include <DS3232RTC.h>
-#include <avr/sleep.h>
+#include <EEPROM.h>
+#include <avr\sleep.h>
 
 byte windRevolutions = 0;
 byte rainCount = 0;
@@ -36,9 +39,10 @@ void loop() {
   }
   
   if ((secondsCounter % 60) == 0) {
-    windReading = analogRead(A2);
+    windHeading = analogRead(A2);
   }
- 
+  Serial.println(secondsCounter); 
+  Serial.flush();
   sleepNow();
 }
 
@@ -79,9 +83,11 @@ ISR(PCINT1_vect) {
 // Interrupt from RTC every 500ms
 ISR(PCINT2_vect) {
   if(digitalRead(2) == HIGH) {
-    writeRecordToEEPROM(windRevolutions, windHeading, rainCount);
+    //writeRecordToEEPROM(windRevolutions, windHeading, rainCount);
     windRevolutions = 0;
     rainCount = 0;
     secondsCounter++;
+  } else {
+    sleepNow();
   }
 }
