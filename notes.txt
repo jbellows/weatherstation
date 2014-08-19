@@ -1,0 +1,150 @@
+Parts list
+----------
+
+$70 sensors - https://www.sparkfun.com/products/8942
+$5  case - Outdoor Products Smartphone Watertight Case - clear 176OP-CLR ($5 at Orem Wal*Mart in the camping section)
+	another option - http://www.walmart.com/ip/Plano-Guide-Waterproof-Stowaway/17126449
+$5 pro mini (3.3v 8MHz) - http://www.ebay.com/itm/US-Stock-Mini-ATMEAG328-3-3V-8Mhz-Replace-ATmega128-For-Arduino-Pro-Mini-/191212504419
+bicolor led
+resistor (3.3K)
+$4 compass - http://www.ebay.com/itm/HMC5883L-Triple-Axis-Compass-Magnetometer-Sensor-Module-For-Arduino-3V-5V-/331224097720
+$4 RTC - http://www.ebay.com/itm/RTC-I2C-DS1307-AT24C32-Real-Time-Clock-Module-For-Arduino-AVR-ARM-PIC-CY-/371058354861
+$3 SD card reader - http://www.ebay.com/itm/New-SD-Card-Module-Slot-Socket-Reader-For-Arduino-ARM-MCU-Read-And-Write-/271434917676
+$4 SD card 8GB - http://www.walmart.com/ip/17786734
+$2 battery holder - http://www.jameco.com/1/1/175-bh-341-2a-r-battery-holder-4-aa-red-black-wires-6-inch-long-wires-s-t-wire-ends.html
+$1 LDO regulator MCP1700 - http://www.mouser.com/ProductDetail/Microchip-Technology/MCP1700-3302E-TO/?qs=h7tZ5KkzNMMPEB66r2rMQw==
+
+
+Ideas
+------
+
+Write one file per day (86400 rows) w/ filename = date as YYYY-MM-DD.csv or YY-MM-DD.csv
+Write every 5 minutes (300 records)
+
+
+
+SD Card Reader from Adafruit
+https://learn.adafruit.com/adafruit-micro-sd-breakout-board-card-tutorial/intro
+
+Includes tutorial and lots of good info
+
+
+Some LC Studio SD Card reader info
+http://www.element14.com/community/thread/15572?start=0&tstart=0
+
+
+SD Card library notes - use SdFat not sd.h!!
+http://forum.arduino.cc/index.php?topic=149504.0
+
+You are using SD.h and it has a bug that doesn't allow the SD to sleep.
+
+SD.h has not added bug fixes from SdFat for about three years and the Adruino developers have added their own bugs.  I tried SD.h with my tests and found cards pulled from 15 to 28 ma when idle.
+
+These same cards pull less than 200 micro-amps with the new SdFat and some as low as 120 micro-amps.
+
+My advice is to convert to my current version of SdFat.
+
+
+I suggest you use sync() as opposed to opening and closing your log file.  sync() does all the operations of close() but leaves the file open and positioned for the next write.  You can power off the logger and all data will be saved, provided you are not in the middle of a write to the file.
+
+
+Modern SD cards sleep at 100 - 200 micro-amps.  Many SD card take 500 ms to initialize and draw a lot of current during initialization (from power off).  A card may draw 50 - 100 ma during this time.
+
+My guess is that several minutes of power off would be required before there was any advantage.
+
+
+
+
+http://electronics.stackexchange.com/questions/49182/how-can-a-let-my-atmega328-run-for-a-year-on-batteries
+
+The Atmega328 provides six power saving modes, ordered from minimal to excellent (estimated current consumptions from this forum post [http://www.gammon.com.au/forum/?id=11497]):
+
+SLEEP_MODE_IDLE: 15 mA
+SLEEP_MODE_ADC: 6.5 mA
+SLEEP_MODE_PWR_SAVE: 1.62 mA
+SLEEP_MODE_EXT_STANDBY: 1.62 mA
+SLEEP_MODE_STANDBY : 0.84 mA
+SLEEP_MODE_PWR_DOWN : 0.36 mA
+
+Quoting the original question, "I figured I could put sleep calls for certain times inside the loop method":
+You would need to use sleep_cpu() after setting up the sleep mode you require, from the list above. The Arduino Playground has a useful post about this [http://www.arduino.cc/playground/Learning/arduinoSleepCode].
+
+The application needs to be interrupt driven, use the above sleep modes extensively, and wake the processor up on button push, timer overflow and watchdog timer events to actually execute tasks.
+
+Additional power savings can be obtained through the following steps:
+
+* Use the microcontroller's internal oscillator and a low clock rate (8MHz instead of 16) - but ensure that time and timing related code still works as expected. A different version of the bootloader might be needed for this.
+
+* Avoid keeping LEDs on for long if the application uses them. Using a rapid double or triple flash of short duration (0.05 second on, 0.5 second off), with gaps of seconds in between, ensures noticeable indication with minimal power consumption
+
+* Use a switching regulator instead of a linear one, if a regulator is required.
+
+* Run the microcontroller at lower voltage if supported, 3.0 Volts (e.g. CR2032 Lithium cell, no regulator needed) or 3.3 Volts instead of 5 Volts.
+
+* Follow recommendations in the datasheet for unused input and output pin settings for minimum power wastage.
+
+Incorporating these suggestions allows for running microcontroller applications for weeks or months on a single CR2032 coin cell, and years on a LR123 type lithium cell. Of course, your mileage may vary depending on what sensors, outputs and actual processing your application requires.
+
+Some useful references:
+
+http://www.engblaze.com/hush-little-microprocessor-avr-and-arduino-sleep-mode-basics/
+http://www.sparkfun.com/tutorials/309
+http://www.gammon.com.au/forum/?id=11497
+
+
+I have an Arduino Pro Mini on my desk right now that is running off 2 AA batteries and could run for over a year if required.
+
+There are three aspects of the design that have achieved this.
+
+1. A different regulator
+
+I'm using a LTC3525 boost regulator. It has very low quiescent current (7uA) and high efficiency (>90% @ 0.2mA). Something like this sparkfun board https://www.sparkfun.com/products/8999 should do a similar job. Make sure to connect it to the 5V pin on the Arduino, not VIN, so that the Arduino regulator is not used.
+
+2. Sleeeeeeep
+
+The proportion of time the device is active will be small. For the rest of the time the device should be asleep in SLEEP_MODE_POWER_DOWN. You can base your sleep routines off the Rocketscreem Low Power Library [http://www.rocketscream.com/blog/2011/07/04/lightweight-low-power-arduino-library/]. According to that link you should be able to get it down to 1.7uA with ADC, BOD and WDT off and in power down mode.
+
+3. Interrupts
+
+The other half of sleep is interrupts to wake it up. In Power Down sleep mode, only level interrupts on INT1 and INT2, TWI match, and the WDT will wake it up. So you need to have a button connected to either INT1 or INT2 so that pressing the button will wake it up.
+
+Other stuff:
+
+Turn off all LEDs unless absolutely necessary. If the lock is indoors the LEDs do not have to be bright, saving more power. Also if you do need to have the MCU performing some task regularly, use the watchdog timer to periodically wake it up.
+
+Edit:
+
+One method that may work is to use the Low Power library above, and sleep for say 60ms every loop thanks to the watchdog timer. On wake up check for button press. The function to call would be
+
+LowPower.powerDown(SLEEP_60MS, ADC_CONTROL_OFF, BOD_OFF);
+
+
+All of these comments are spot on. I would like to add a few more suggestions:
+
+1) For LEDs, use high output 20 mA LEDs. Here's the logic. Lets say you want a dim status LED that blinks every 8 seconds. You don't want it to be bright, so you use some random LED. The problem is, a dim LED still uses 20 mA (or more) to output only 100 mcd. Instead, get a high output LED that's still rated for 20 mA but can output 4000 mcd (make sure you look at the output angle, you still probably want it to be 30 degrees or more). With this 4000 mcd LED, you connect it with something like a 3.3 k Ohm resistor and you get around 100 mcd of light output, but are using less than 1 mA. So, instead of using 20 mA for the status LED, you're using a fraction of a single mA. I also typically set the status LED flash on time for only 5-15 ms, which can also save a lot of power if you previously had the flash on time at 100 ms.
+
+2) My voltage regulator of choice is the Microchip MCP1700. It uses only 1.6 µA of quiescent current and is super cheap (around $0.30 in small quantities). It's only limitation is that the maximum input voltage is only 6 volts, so you can't use a 9 volt battery. But, it's perfect for 4 AA batteries, a single cell LiPo or two lithium coin cells.
+
+3) For powering an ATmega circuit with 4 AA batteries, I typically use a 1N4001 diode on VCC to drop the maximum 6 volts of the 4 batteries to 5.5 volts. Also, the diode protects the ATmega from reverse voltage, so it serves two useful purposes. Doing this, I can create a battery powered circuit that can use as little as 0.1 µA while sleeping as there's no voltage regulator eating up current all the time.
+
+
+
+
+
+Test results
+============
+5v 16MHz 328 Pro Mini
+	w/ regulator and power LED - 18mA
+	w/o reg & power LED - 3uA (w/i meter error)
+
+RTC
+	w/ power to VCC & charging battery 4.5mA
+	w/ power to VCC & not charging batt 1.5mA
+	w/ VCC off (vBatt mode) = 0mA (10 year life on Lion)
+
+Compass
+	31uA
+
+SD Card
+	startup 1.5mA
+	quiescent 175uA (clk pulled high)
