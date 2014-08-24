@@ -54,9 +54,10 @@ void setup() {
   if (!sd.begin(SD_CARD_SELECT, SPI_FULL_SPEED)) sd.initErrorHalt();
   time_t time = RTC.get();
   char fileName[13];
-  sprintf(fileName, "%d%02d%02d.csv", year(time), month(time), day(time));
+  sprintf(fileName, "%s.csv", getDateString(time));
   file.open(fileName, O_CREAT | O_SYNC | O_APPEND | O_WRITE);  
- 
+  Serial.println(fileName);
+  
   // Enable the interrupts for pin I/O level change
   cli();
   PCICR  = 0b00000111;
@@ -82,14 +83,14 @@ void loop() {
         if (recordHour == 0 && recordMinute == 0 && recordSecond == 0) {
           file.close();
           char fileName[13];
-          sprintf(fileName, "%d%02d%02d.csv", year(time), month(time), day(time));
+          sprintf(fileName, "%s.csv", getDateString(time));
           file.open(fileName, O_CREAT | O_SYNC | O_APPEND | O_WRITE);
         }
         
         byte windSpeed, windHeading, rainCount;
         readRecordFromEEPROM(i, &windSpeed, &windHeading, &rainCount);
-        char recordString[25];
-        sprintf(recordString, "%02d:%02d:%02d,%d,%d,%d\r\n", recordHour, recordMinute, recordSecond, windSpeed, windHeading, rainCount);
+        char recordString[36];
+        sprintf(recordString, "%s,%02d:%02d:%02d,%d,%d,%d\r\n", getDateString(time), recordHour, recordMinute, recordSecond, windSpeed, windHeading, rainCount);
         file.write(recordString);
         time = time + 1;
       }
@@ -107,6 +108,12 @@ void loop() {
 
 void sleepNow() {
   LowPower.powerDown(SLEEP_FOREVER, ADC_OFF, BOD_OFF);
+}
+
+char* getDateString(time_t timeStamp) {
+  char* dateString = (char*) malloc(34);
+  sprintf(dateString, "%d%02d%02d", year(timeStamp), month(timeStamp), day(timeStamp));
+  return dateString;
 }
 
 void writeRecordToEEPROM(uint16_t recordNumber, byte windSpeed, byte windHeading, byte rainCount) {
