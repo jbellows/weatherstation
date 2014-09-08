@@ -24,6 +24,17 @@
 #include <EEPROM.h>
 #include <avr/sleep.h>
 
+#define EEPROM_POINTER          0
+#define WIND_VANE_POWER_PIN     A1
+#define WIND_VANE_SENSOR_PIN    A2
+#define ANEMOMETER_SENSOR_PIN   A0
+#define RAIN_SENSOR_PIN         8
+#define HZ_SIGNAL_PIN           2
+#define SD_CARD_SELECT          9
+#define HMC5883_ADDRESS         0x1e
+#define SD_WRITE_INTERVAL       60
+//#define DEBUG_SERIAL
+
 byte windRevolutions = 0;
 byte rainCount = 0;
 byte windHeading = 0;
@@ -33,18 +44,18 @@ boolean runLoop = false;
 SdFat sd;
 SdFile file;
 
-#define EEPROM_POINTER          0
-#define WIND_VANE_POWER_PIN     A1
-#define WIND_VANE_SENSOR_PIN    A2
-#define ANEMOMETER_SENSOR_PIN   A0
-#define RAIN_SENSOR_PIN         8
-#define HZ_SIGNAL_PIN           2
-#define SD_CARD_SELECT          9
-#define HMC5883_ADDRESS         0x1e
+typedef struct {
+  byte windSpeed;
+  byte windHeadingRainCount;
+} WeatherRecord;
+
+WeatherRecord records[SD_WRITE_INTERVAL];
 
 void setup() {
+#ifdef DEBUG_SERIAL
   Serial.begin(115200);
-  
+#endif
+
   RTC.squareWave(SQWAVE_1_HZ);
 
   pinMode(ANEMOMETER_SENSOR_PIN, OUTPUT);
@@ -59,9 +70,11 @@ void setup() {
   char* dateString = getDateString(time);
   sprintf(fileName, "%s.csv", dateString);
   file.open(fileName, O_CREAT | O_SYNC | O_APPEND | O_WRITE);  
+#ifdef DEBUG_SERIAL
   Serial.println(fileName);
-  
-  //initializeCompass();
+#endif
+
+  initializeCompass();
   // Enable the interrupts for pin I/O level change
   cli();
   PCICR  = 0b00000111;
@@ -74,12 +87,14 @@ void setup() {
 void loop() {
   if (runLoop) {
     runLoop = false;
-    if (secondsCounter >= 300) {
+    if (secondsCounter >= SD_WRITE_INTERVAL) {
       secondsCounter = 0;
-      //compassHeading = readCompassHeading();
+      compassHeading = readCompassHeading();
+#ifdef DEBUG_SERIAL
       Serial.println("Writing to SD Card");
-      time_t time = RTC.get() - 300;
-      for (int i = 0; i < 300; i++) {
+#endif
+      time_t time = RTC.get() - SD_WRITE_INTERVAL;
+      for (int i = 0; i < SD_WRITE_INTERVAL; i++) {
         byte recordHour = hour(time);
         byte recordMinute = minute(time);
         byte recordSecond = second(time);
@@ -100,13 +115,17 @@ void loop() {
       }
     }
   
-    if ((secondsCounter % 1) == 0) {
+    if ((secondsCounter % 10) == 0) {
       windHeading = getWindVaneHeading();
+#ifdef DEBUG_SERIAL
       Serial.print("Wind Heading: ");
       Serial.println(windHeading);
+#endif
     }
   }
+#ifdef DEBUG_SERIAL
   Serial.flush();
+#endif
   sleepNow();
 }
 
@@ -115,9 +134,8 @@ void sleepNow() {
 }
 
 char* getDateString(time_t timeStamp) {
-  char dateString[9];
+  static char dateString[9];
   sprintf(dateString, "%d%02d%02d", year(timeStamp), month(timeStamp), day(timeStamp));
-  Serial.println(dateString);
   return dateString;
 }
 
@@ -127,8 +145,6 @@ uint16_t getWindVaneHeading() {
   rawValue = analogRead(WIND_VANE_SENSOR_PIN);
   digitalWrite(WIND_VANE_POWER_PIN, HIGH);
   
-  Serial.print("Raw Value: ");
-  Serial.println(rawValue);
   if (rawValue < 172) {
     return 0;
   } else if (rawValue < 200) {
@@ -203,18 +219,15 @@ uint16_t getWindHeadingDegrees(byte heading) {
   return 361;
 }
   
-  
-
-
 void writeRecordToEEPROM(uint16_t recordNumber, byte windSpeed, byte windHeading, byte rainCount) {
-  EEPROM.write(EEPROM_POINTER * recordNumber, windSpeed);
+  records[recordNumber].windSpeed = windSpeed;
   windHeading = (windHeading << 4) & 0b11110000;
-  EEPROM.write((EEPROM_POINTER * recordNumber) + 1, windHeading + rainCount);
+  records[recordNumber].windHeadingRainCount = windHeading + rainCount;
 }
 
 void readRecordFromEEPROM(uint16_t recordNumber, byte* windSpeed, byte* windHeading, byte* rainCount) {
-  *windSpeed = EEPROM.read(EEPROM_POINTER * recordNumber);
-  *rainCount = EEPROM.read((EEPROM_POINTER * recordNumber) + 1);
+  *windSpeed = records[recordNumber].windSpeed;
+  *rainCount = records[recordNumber].windHeadingRainCount;
   *windHeading = (*rainCount >> 4) & 0b00001111;
   *rainCount = *rainCount & 0b00001111;
 }
@@ -271,7 +284,9 @@ ISR(PCINT1_vect) {
 // Interrupt from RTC every 500ms
 ISR(PCINT2_vect) {
   if(digitalRead(HZ_SIGNAL_PIN) == HIGH) {
+#ifdef DEBUG_SERIAL
     Serial.println(secondsCounter);
+#endif
     writeRecordToEEPROM(secondsCounter, windRevolutions, windHeading, rainCount);
     windRevolutions = 0;
     rainCount = 0;
