@@ -25,9 +25,13 @@
 #include <avr/sleep.h>
 
 #define EEPROM_POINTER          0
+#define BATTERY_SENSOR_PIN      A3
 #define WIND_VANE_POWER_PIN     A1
 #define WIND_VANE_SENSOR_PIN    A2
 #define ANEMOMETER_SENSOR_PIN   A0
+#define RED_LED_PIN             5
+#define GREEN_LED_PIN           6
+#define BUTTON_PIN              3
 #define RAIN_SENSOR_PIN         8
 #define HZ_SIGNAL_PIN           2
 #define SD_CARD_SELECT          9
@@ -57,12 +61,11 @@ void setup() {
 #endif
 
   RTC.squareWave(SQWAVE_1_HZ);
-
-  pinMode(ANEMOMETER_SENSOR_PIN, OUTPUT);
-  digitalWrite(ANEMOMETER_SENSOR_PIN, HIGH);
   
-  pinMode(RAIN_SENSOR_PIN, OUTPUT);
-  digitalWrite(RAIN_SENSOR_PIN, HIGH);
+  pinMode(ANEMOMETER_SENSOR_PIN, INPUT_PULLUP);
+  pinMode(RAIN_SENSOR_PIN, INPUT_PULLUP);
+  pinMode(HZ_SIGNAL_PIN, INPUT_PULLUP);
+  pinMode(13, INPUT_PULLUP);
  
   if (!sd.begin(SD_CARD_SELECT, SPI_FULL_SPEED)) sd.initErrorHalt();
   time_t time = RTC.get();
@@ -130,6 +133,8 @@ void loop() {
 }
 
 void sleepNow() {
+  pinMode(A4, INPUT_PULLUP);
+  pinMode(A5, INPUT_PULLUP);
   LowPower.powerDown(SLEEP_FOREVER, ADC_OFF, BOD_OFF);
 }
 
@@ -141,9 +146,9 @@ char* getDateString(time_t timeStamp) {
 
 uint16_t getWindVaneHeading() {
   uint16_t rawValue;
-  digitalWrite(WIND_VANE_POWER_PIN, LOW);
-  rawValue = analogRead(WIND_VANE_SENSOR_PIN);
   digitalWrite(WIND_VANE_POWER_PIN, HIGH);
+  rawValue = analogRead(WIND_VANE_SENSOR_PIN);
+  digitalWrite(WIND_VANE_POWER_PIN, LOW);
   
   if (rawValue < 172) {
     return 0;
@@ -269,7 +274,7 @@ uint16_t readCompassHeading() {
 
 // Interrupt for rain gauge
 ISR(PCINT0_vect) {
-  if (digitalRead(RAIN_SENSOR_PIN) == HIGH) {
+  if (digitalRead(RAIN_SENSOR_PIN) == LOW) {
     rainCount++;
   }
 }
